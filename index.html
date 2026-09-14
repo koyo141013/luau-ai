@@ -1,0 +1,185 @@
+﻿<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <title>Luau AI Beta v0.5</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+
+    <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+<div class="app">
+
+    <!-- 사이드바 -->
+    <aside class="sidebar">
+
+        <div class="logo">
+            <div class="logo-icon">L</div>
+
+            <div>
+                <div class="logo-title">Luau AI</div>
+                <div class="logo-version">Beta v0.5 • Local AI</div>
+            </div>
+        </div>
+
+        <button class="new-chat" id="newChat">
+            <span>＋</span>
+            새 채팅
+        </button>
+
+        <div class="section-title">MODE</div>
+
+        <button class="mode active" data-mode="CHAT">
+            <span>💬</span>
+            Chat
+        </button>
+
+        <button class="mode" data-mode="CODE">
+            <span>💻</span>
+            Code
+        </button>
+
+        <button class="mode" data-mode="EXPLAIN">
+            <span>📖</span>
+            Explain
+        </button>
+
+        <button class="mode" data-mode="FIX">
+            <span>🔧</span>
+            Fix
+        </button>
+
+        <div class="sidebar-bottom">
+
+            <div class="status">
+                <span class="status-dot"></span>
+
+                <div>
+                    <div class="status-title">Local Model</div>
+                    <div class="status-text">RTX 3060 Ti</div>
+                </div>
+            </div>
+
+            <div class="model-info">
+                TinyLuauGPT Beta v0.5
+            </div>
+
+        </div>
+
+    </aside>
+
+
+    <!-- 메인 -->
+    <main class="main">
+
+        <!-- 헤더 -->
+        <header class="header">
+
+            <div class="mobile-logo">
+                <div class="logo-icon">L</div>
+                <strong>Luau AI</strong>
+            </div>
+
+            <div class="current-mode">
+                <span id="modeIcon">💬</span>
+                <span id="modeName">Chat</span>
+            </div>
+
+            <div class="header-right">
+                <span class="local-badge">
+                    ● LOCAL
+                </span>
+            </div>
+
+        </header>
+
+
+        <!-- 채팅 -->
+        <section class="chat-area" id="chatArea">
+
+            <!-- 시작 화면 -->
+            <div class="welcome" id="welcome">
+
+                <div class="welcome-icon">
+                    🤖
+                </div>
+
+                <h1>
+                    Luau AI
+                </h1>
+
+                <p>
+                    Roblox와 Luau 코딩을 도와주는<br>
+                    나만의 로컬 AI
+                </p>
+
+                <div class="quick-actions">
+
+                    <button class="quick" data-prompt="플레이어가 게임에 들어오면 이름을 출력해줘.">
+                        <span>💻</span>
+                        플레이어 이름 출력
+                    </button>
+
+                    <button class="quick" data-prompt="local Players = game:GetService('Players')">
+                        <span>📖</span>
+                        이 코드 설명해줘
+                    </button>
+
+                    <button class="quick" data-prompt="안녕?">
+                        <span>💬</span>
+                        AI와 대화하기
+                    </button>
+
+                </div>
+
+            </div>
+
+        </section>
+
+
+        <!-- 입력 -->
+        <div class="input-wrapper">
+
+            <div class="input-box">
+
+                <textarea
+                    id="prompt"
+                    rows="1"
+                    placeholder="메시지를 입력하세요..."
+                    autocomplete="off"
+                ></textarea>
+
+                <button id="sendButton" class="send-button">
+                    ➤
+                </button>
+
+            </div>
+
+            <div class="input-hint">
+                Luau AI Beta v0.5 • Local inference
+            </div>
+
+        </div>
+
+    </main>
+
+</div>
+
+
+<!-- 코드 복사 알림 -->
+<div class="toast" id="toast">
+    복사되었습니다!
+</div>
+
+
+<script src="app.js"></script>
+
+</body>
+</html>
