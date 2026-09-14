@@ -1,0 +1,30 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual environment
+.venv/
+venv/
+env/
+
+# Large trained models
+*.pt
+*.pth
+*.ckpt
+*.bin
+
+# Dataset files
+dataset/*.txt
+dataset/*.pt
+
+# Python cache
+.pytest_cache/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
