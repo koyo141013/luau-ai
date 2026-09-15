@@ -165,7 +165,7 @@ async function sendMessage() {
          */
 
         const response = await fetch(
-            "/api/generate",
+            "https://luau-ai.onrender.com/api/generate",
             {
                 method: "POST",
 

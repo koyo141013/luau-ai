@@ -3,6 +3,7 @@ import json
 
 import torch
 from flask import Flask, jsonify, request, send_from_directory
+from flask_cors import CORS
 
 from src.model_v52 import TinyLuauGPTv52
 
@@ -26,7 +27,19 @@ MODEL_PATH = ROOT / "model" / "tiny_luau_gpt_v52_best.pt"
 # Flask
 # ============================================================
 
-app = Flask(__name__, static_folder=str(WEB_DIR))
+app = Flask(
+    __name__,
+    static_folder=str(WEB_DIR)
+)
+
+CORS(
+    app,
+    resources={
+        r"/api/*": {
+            "origins": "https://koyo141013.github.io"
+        }
+    }
+)
 
 
 # ============================================================
@@ -43,27 +56,45 @@ print("=" * 64)
 print(f"Device: {device}")
 
 if device == "cuda":
-    print(f"GPU: {torch.cuda.get_device_name(0)}")
+    print(
+        f"GPU: {torch.cuda.get_device_name(0)}"
+    )
 
 
 # ============================================================
 # Tokenizer
 # ============================================================
 
-with open(TOKENIZER_PATH, "r", encoding="utf-8") as f:
+with open(
+    TOKENIZER_PATH,
+    "r",
+    encoding="utf-8"
+) as f:
+
     tokenizer_data = json.load(f)
+
 
 vocab = tokenizer_data["vocab"]
 
 stoi = vocab
-itos = {int(v): k for k, v in vocab.items()}
 
-special_tokens = tokenizer_data.get("special_tokens", [])
+itos = {
+    int(v): k
+    for k, v in vocab.items()
+}
 
-print(f"Vocabulary size: {len(vocab)}")
+special_tokens = tokenizer_data.get(
+    "special_tokens",
+    []
+)
+
+print(
+    f"Vocabulary size: {len(vocab)}"
+)
 
 
 def encode(text):
+
     tokens = []
 
     i = 0
@@ -80,9 +111,14 @@ def encode(text):
 
         for token in special_sorted:
 
-            if text.startswith(token, i):
+            if text.startswith(
+                token,
+                i
+            ):
 
-                tokens.append(stoi[token])
+                tokens.append(
+                    stoi[token]
+                )
 
                 i += len(token)
 
@@ -94,21 +130,28 @@ def encode(text):
             continue
 
         if text[i] == " ":
+
             token = "<SPACE>"
 
         elif text[i] == "\t":
+
             token = "<TAB>"
 
         elif text[i] == "\n":
+
             token = "<NEWLINE>"
 
         else:
+
             token = text[i]
 
         tokens.append(
             stoi.get(
                 token,
-                stoi.get("<UNK>", 1),
+                stoi.get(
+                    "<UNK>",
+                    1
+                ),
             )
         )
 
@@ -123,21 +166,32 @@ def decode(ids):
 
     for idx in ids:
 
-        token = itos.get(int(idx), "")
+        token = itos.get(
+            int(idx),
+            ""
+        )
 
         if token == "<SPACE>":
+
             result.append(" ")
 
         elif token == "<TAB>":
+
             result.append("\t")
 
         elif token == "<NEWLINE>":
+
             result.append("\n")
 
-        elif token.startswith("<") and token.endswith(">"):
+        elif (
+            token.startswith("<")
+            and token.endswith(">")
+        ):
+
             continue
 
         else:
+
             result.append(token)
 
     return "".join(result)
@@ -153,6 +207,7 @@ checkpoint = torch.load(
     weights_only=False,
 )
 
+
 model = TinyLuauGPTv52(
     vocab_size=checkpoint["vocab_size"],
     block_size=checkpoint["block_size"],
@@ -162,20 +217,30 @@ model = TinyLuauGPTv52(
     dropout=checkpoint["dropout"],
 ).to(device)
 
+
 model.load_state_dict(
     checkpoint["model_state_dict"]
 )
 
 model.eval()
 
-print(f"Model: {MODEL_PATH.name}")
-print(f"Parameters: {model.num_parameters():,}")
+
+print(
+    f"Model: {MODEL_PATH.name}"
+)
+
+print(
+    f"Parameters: {model.num_parameters():,}"
+)
+
 
 if "best_val_loss" in checkpoint:
+
     print(
         f"Best Val Loss: "
         f"{checkpoint['best_val_loss']:.4f}"
     )
+
 
 print()
 
@@ -209,7 +274,10 @@ MODE_SETTINGS = {
 
 
 @torch.no_grad()
-def generate_response(mode, prompt):
+def generate_response(
+    mode,
+    prompt
+):
 
     settings = MODE_SETTINGS.get(
         mode,
@@ -222,7 +290,9 @@ def generate_response(mode, prompt):
         f"<RESPONSE>\n"
     )
 
-    ids = encode(input_text)
+    ids = encode(
+        input_text
+    )
 
     x = torch.tensor(
         [ids],
@@ -232,17 +302,27 @@ def generate_response(mode, prompt):
 
     output = model.generate(
         x,
-        max_new_tokens=settings["max_new_tokens"],
-        temperature=settings["temperature"],
+        max_new_tokens=settings[
+            "max_new_tokens"
+        ],
+        temperature=settings[
+            "temperature"
+        ],
         top_k=40,
-        stop_token_id=stoi.get("<END>"),
+        stop_token_id=stoi.get(
+            "<END>"
+        ),
     )
 
     output_ids = output[0].tolist()
 
-    response_ids = output_ids[len(ids):]
+    response_ids = (
+        output_ids[len(ids):]
+    )
 
-    response = decode(response_ids)
+    response = decode(
+        response_ids
+    )
 
     return response.strip()
 
@@ -273,18 +353,27 @@ def static_files(path):
 def status():
 
     return jsonify({
+
         "version": VERSION,
+
         "model": "Luau AI v5.2",
+
         "device": device,
+
         "gpu": (
             torch.cuda.get_device_name(0)
             if device == "cuda"
             else None
         ),
-        "parameters": model.num_parameters(),
-        "best_val_loss": checkpoint.get(
-            "best_val_loss"
-        ),
+
+        "parameters":
+            model.num_parameters(),
+
+        "best_val_loss":
+            checkpoint.get(
+                "best_val_loss"
+            ),
+
     })
 
 
@@ -295,23 +384,35 @@ def generate():
         silent=True
     ) or {}
 
+
     prompt = str(
-        data.get("prompt", "")
+        data.get(
+            "prompt",
+            ""
+        )
     ).strip()
 
+
     mode = str(
-        data.get("mode", "CHAT")
+        data.get(
+            "mode",
+            "CHAT"
+        )
     ).upper()
+
 
     if not prompt:
 
         return jsonify({
-            "error": "Prompt is empty."
+            "error":
+                "Prompt is empty."
         }), 400
+
 
     if mode not in MODE_SETTINGS:
 
         mode = "CHAT"
+
 
     try:
 
@@ -321,17 +422,31 @@ def generate():
         )
 
         return jsonify({
-            "response": response,
-            "mode": mode,
-            "version": VERSION,
+
+            "response":
+                response,
+
+            "mode":
+                mode,
+
+            "version":
+                VERSION,
+
         })
+
 
     except Exception as e:
 
-        print("Generation error:", e)
+        print(
+            "Generation error:",
+            e
+        )
 
         return jsonify({
-            "error": str(e)
+
+            "error":
+                str(e)
+
         }), 500
 
 
@@ -342,12 +457,21 @@ def generate():
 if __name__ == "__main__":
 
     print("=" * 64)
-    print("Luau AI v5.2 Web Server Ready")
+
+    print(
+        "Luau AI v5.2 Web Server Ready"
+    )
+
     print("=" * 64)
 
     print()
+
     print("Open:")
-    print("http://127.0.0.1:8000/")
+
+    print(
+        "http://127.0.0.1:8000/"
+    )
+
     print()
 
     app.run(
