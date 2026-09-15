@@ -3,7 +3,6 @@ import json
 
 import torch
 from flask import Flask, jsonify, request, send_from_directory
-from flask_cors import CORS
 
 from src.model_v52 import TinyLuauGPTv52
 
@@ -32,32 +31,66 @@ app = Flask(
     static_folder=str(WEB_DIR)
 )
 
-CORS(
-    app,
-    resources={
-        r"/api/*": {
-            "origins": "https://koyo141013.github.io"
-        }
-    }
+
+# ============================================================
+# CORS
+# ============================================================
+
+@app.after_request
+def add_cors_headers(response):
+
+    response.headers["Access-Control-Allow-Origin"] = (
+        "https://koyo141013.github.io"
+    )
+
+    response.headers["Access-Control-Allow-Methods"] = (
+        "GET, POST, OPTIONS"
+    )
+
+    response.headers["Access-Control-Allow-Headers"] = (
+        "Content-Type"
+    )
+
+    return response
+
+
+# ============================================================
+# OPTIONS / CORS Preflight
+# ============================================================
+
+@app.route(
+    "/api/<path:path>",
+    methods=["OPTIONS"]
 )
+def handle_options(path):
+
+    return "", 204
 
 
 # ============================================================
 # Device
 # ============================================================
 
-device = "cuda" if torch.cuda.is_available() else "cpu"
+device = (
+    "cuda"
+    if torch.cuda.is_available()
+    else "cpu"
+)
 
 print("=" * 64)
 print("Luau AI v5.2 Web Server")
 print("User-facing version: Beta 0.5")
 print("=" * 64)
 
-print(f"Device: {device}")
+print(
+    f"Device: {device}"
+)
 
 if device == "cuda":
+
     print(
-        f"GPU: {torch.cuda.get_device_name(0)}"
+        f"GPU: "
+        f"{torch.cuda.get_device_name(0)}"
     )
 
 
@@ -127,6 +160,7 @@ def encode(text):
                 break
 
         if matched:
+
             continue
 
         if text[i] == " ":
@@ -230,7 +264,8 @@ print(
 )
 
 print(
-    f"Parameters: {model.num_parameters():,}"
+    f"Parameters: "
+    f"{model.num_parameters():,}"
 )
 
 
@@ -252,24 +287,37 @@ print()
 MODE_SETTINGS = {
 
     "CHAT": {
+
         "temperature": 0.85,
+
         "max_new_tokens": 120,
+
     },
 
     "CODE": {
+
         "temperature": 0.55,
+
         "max_new_tokens": 260,
+
     },
 
     "EXPLAIN": {
+
         "temperature": 0.70,
+
         "max_new_tokens": 220,
+
     },
 
     "FIX": {
+
         "temperature": 0.55,
+
         "max_new_tokens": 260,
+
     },
+
 }
 
 
@@ -314,7 +362,9 @@ def generate_response(
         ),
     )
 
-    output_ids = output[0].tolist()
+    output_ids = (
+        output[0].tolist()
+    )
 
     response_ids = (
         output_ids[len(ids):]
@@ -349,21 +399,32 @@ def static_files(path):
     )
 
 
+# ============================================================
+# Status API
+# ============================================================
+
 @app.get("/api/status")
 def status():
 
     return jsonify({
 
-        "version": VERSION,
+        "version":
+            VERSION,
 
-        "model": "Luau AI v5.2",
+        "model":
+            "Luau AI v5.2",
 
-        "device": device,
+        "device":
+            device,
 
         "gpu": (
+
             torch.cuda.get_device_name(0)
+
             if device == "cuda"
+
             else None
+
         ),
 
         "parameters":
@@ -376,6 +437,10 @@ def status():
 
     })
 
+
+# ============================================================
+# Generate API
+# ============================================================
 
 @app.post("/api/generate")
 def generate():
@@ -404,8 +469,10 @@ def generate():
     if not prompt:
 
         return jsonify({
+
             "error":
                 "Prompt is empty."
+
         }), 400
 
 
@@ -416,10 +483,26 @@ def generate():
 
     try:
 
+        print(
+            f"[API] Generate request "
+            f"mode={mode}"
+        )
+
+        print(
+            f"[API] Prompt: {prompt[:100]}"
+        )
+
+
         response = generate_response(
             mode,
             prompt,
         )
+
+
+        print(
+            "[API] Generation complete"
+        )
+
 
         return jsonify({
 
@@ -473,6 +556,7 @@ if __name__ == "__main__":
     )
 
     print()
+
 
     app.run(
         host="127.0.0.1",
