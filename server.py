@@ -290,7 +290,8 @@ MODE_SETTINGS = {
 
         "temperature": 0.85,
 
-        "max_new_tokens": 120,
+        # Render Free CPU 테스트용
+        "max_new_tokens": 10,
 
     },
 
