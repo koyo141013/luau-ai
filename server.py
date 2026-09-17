@@ -1,25 +1,18 @@
 from pathlib import Path
 import json
+import time
 
 import torch
 from flask import Flask, jsonify, request, send_from_directory
 
-from src.model_v52 import TinyLuauGPTv52
-
 
 # ============================================================
-# Luau AI v5.2
-# User-facing version: Beta 0.5
+# 경로 설정
 # ============================================================
 
-VERSION = "Beta 0.5"
-
-ROOT = Path(__file__).resolve().parent
-
-WEB_DIR = ROOT / "web"
-
-TOKENIZER_PATH = ROOT / "model" / "tokenizer_v52.json"
-MODEL_PATH = ROOT / "model" / "tiny_luau_gpt_v52_best.pt"
+BASE_DIR = Path(__file__).resolve().parent
+MODEL_DIR = BASE_DIR / "model"
+WEB_DIR = BASE_DIR / "web"
 
 
 # ============================================================
@@ -28,7 +21,7 @@ MODEL_PATH = ROOT / "model" / "tiny_luau_gpt_v52_best.pt"
 
 app = Flask(
     __name__,
-    static_folder=str(WEB_DIR)
+    static_folder=str(WEB_DIR),
 )
 
 
@@ -38,7 +31,6 @@ app = Flask(
 
 @app.after_request
 def add_cors_headers(response):
-
     response.headers["Access-Control-Allow-Origin"] = (
         "https://koyo141013.github.io"
     )
@@ -54,189 +46,101 @@ def add_cors_headers(response):
     return response
 
 
-# ============================================================
-# OPTIONS / CORS Preflight
-# ============================================================
-
-@app.route(
-    "/api/<path:path>",
-    methods=["OPTIONS"]
-)
+@app.route("/api/<path:path>", methods=["OPTIONS"])
 def handle_options(path):
-
     return "", 204
 
 
 # ============================================================
-# Device
+# 디바이스
 # ============================================================
 
-device = (
-    "cuda"
-    if torch.cuda.is_available()
-    else "cpu"
+device = torch.device(
+    "cuda" if torch.cuda.is_available() else "cpu"
 )
 
-print("=" * 64)
-print("Luau AI v5.2 Web Server")
-print("User-facing version: Beta 0.5")
-print("=" * 64)
-
-print(
-    f"Device: {device}"
-)
-
-if device == "cuda":
-
-    print(
-        f"GPU: "
-        f"{torch.cuda.get_device_name(0)}"
-    )
-
 
 # ============================================================
-# Tokenizer
+# 모델 / 토크나이저
 # ============================================================
 
-with open(
-    TOKENIZER_PATH,
-    "r",
-    encoding="utf-8"
-) as f:
+from src.model_v52 import TinyLuauGPTv52
 
+
+TOKENIZER_PATH = MODEL_DIR / "tokenizer_v52.json"
+CHECKPOINT_PATH = MODEL_DIR / "tiny_luau_gpt_v52_best.pt"
+
+
+# ------------------------------------------------------------
+# Tokenizer 로드
+# ------------------------------------------------------------
+
+with open(TOKENIZER_PATH, "r", encoding="utf-8") as f:
     tokenizer_data = json.load(f)
 
 
-vocab = tokenizer_data["vocab"]
+stoi = tokenizer_data["stoi"]
+itos = tokenizer_data["itos"]
 
-stoi = vocab
 
-itos = {
-    int(v): k
-    for k, v in vocab.items()
+# JSON에서 숫자가 문자열로 저장될 가능성 대응
+stoi = {
+    str(k): int(v)
+    for k, v in stoi.items()
 }
 
-special_tokens = tokenizer_data.get(
-    "special_tokens",
-    []
-)
-
-print(
-    f"Vocabulary size: {len(vocab)}"
-)
+itos = {
+    str(k): str(v)
+    for k, v in itos.items()
+}
 
 
-def encode(text):
+# ============================================================
+# Tokenizer 함수
+# ============================================================
+
+def encode_text(text):
+    """
+    문자열 -> 토큰 ID
+    """
 
     tokens = []
 
-    i = 0
+    for ch in text:
+        key = ch
 
-    special_sorted = sorted(
-        special_tokens,
-        key=len,
-        reverse=True,
-    )
-
-    while i < len(text):
-
-        matched = False
-
-        for token in special_sorted:
-
-            if text.startswith(
-                token,
-                i
-            ):
-
-                tokens.append(
-                    stoi[token]
-                )
-
-                i += len(token)
-
-                matched = True
-
-                break
-
-        if matched:
-
-            continue
-
-        if text[i] == " ":
-
-            token = "<SPACE>"
-
-        elif text[i] == "\t":
-
-            token = "<TAB>"
-
-        elif text[i] == "\n":
-
-            token = "<NEWLINE>"
-
+        if key in stoi:
+            tokens.append(stoi[key])
         else:
-
-            token = text[i]
-
-        tokens.append(
-            stoi.get(
-                token,
-                stoi.get(
-                    "<UNK>",
-                    1
-                ),
-            )
-        )
-
-        i += 1
+            # 알 수 없는 문자는 공백으로 대체
+            if " " in stoi:
+                tokens.append(stoi[" "])
 
     return tokens
 
 
-def decode(ids):
+def decode_tokens(tokens):
+    """
+    토큰 ID -> 문자열
+    """
 
     result = []
 
-    for idx in ids:
+    for token_id in tokens:
+        key = str(int(token_id))
 
-        token = itos.get(
-            int(idx),
-            ""
-        )
-
-        if token == "<SPACE>":
-
-            result.append(" ")
-
-        elif token == "<TAB>":
-
-            result.append("\t")
-
-        elif token == "<NEWLINE>":
-
-            result.append("\n")
-
-        elif (
-            token.startswith("<")
-            and token.endswith(">")
-        ):
-
-            continue
-
-        else:
-
-            result.append(token)
+        if key in itos:
+            result.append(itos[key])
 
     return "".join(result)
 
 
 # ============================================================
-# Model
+# Checkpoint 로드
 # ============================================================
 
 checkpoint = torch.load(
-    MODEL_PATH,
+    CHECKPOINT_PATH,
     map_location=device,
     weights_only=False,
 )
@@ -259,308 +163,307 @@ model.load_state_dict(
 model.eval()
 
 
-print(
-    f"Model: {MODEL_PATH.name}"
+# ============================================================
+# 정보
+# ============================================================
+
+PARAMETERS = sum(
+    p.numel()
+    for p in model.parameters()
 )
 
-print(
-    f"Parameters: "
-    f"{model.num_parameters():,}"
+BEST_VAL_LOSS = checkpoint.get(
+    "best_val_loss",
+    None,
 )
 
 
-if "best_val_loss" in checkpoint:
+print("=" * 60)
+print("Luau AI v5.2 Web Server")
+print("User-facing version: Beta 0.5")
+print("=" * 60)
+print(f"Device: {device}")
+print(f"Vocabulary size: {len(stoi)}")
+print(f"Model: {CHECKPOINT_PATH.name}")
+print(f"Parameters: {PARAMETERS:,}")
 
+if BEST_VAL_LOSS is not None:
     print(
-        f"Best Val Loss: "
-        f"{checkpoint['best_val_loss']:.4f}"
+        f"Best Val Loss: {float(BEST_VAL_LOSS):.4f}"
     )
 
-
-print()
+print("=" * 60)
 
 
 # ============================================================
-# Generation
+# 생성 설정
 # ============================================================
 
 MODE_SETTINGS = {
-
     "CHAT": {
-
         "temperature": 0.85,
 
         # Render Free CPU 테스트용
         "max_new_tokens": 10,
-
     },
 
     "CODE": {
-
         "temperature": 0.55,
-
         "max_new_tokens": 260,
-
     },
 
     "EXPLAIN": {
-
         "temperature": 0.70,
-
         "max_new_tokens": 220,
-
     },
 
     "FIX": {
-
         "temperature": 0.55,
-
         "max_new_tokens": 260,
-
     },
-
 }
 
 
+# ============================================================
+# 모델 생성 함수
+# ============================================================
+
 @torch.no_grad()
-def generate_response(
-    mode,
-    prompt
-):
+def generate_response(prompt, mode="CHAT"):
+    """
+    사용자 프롬프트를 받아 모델 응답 생성
+    """
 
-    settings = MODE_SETTINGS.get(
-        mode,
-        MODE_SETTINGS["CHAT"],
-    )
+    mode = str(mode).upper()
 
-    input_text = (
+    if mode not in MODE_SETTINGS:
+        mode = "CHAT"
+
+    settings = MODE_SETTINGS[mode]
+
+    # 모드 토큰
+    formatted_prompt = (
         f"<{mode}>\n"
         f"{prompt}\n"
         f"<RESPONSE>\n"
     )
 
-    ids = encode(
-        input_text
-    )
+    encoded = encode_text(formatted_prompt)
+
+    if not encoded:
+        encoded = [
+            stoi.get(" ", 0)
+        ]
+
+    # block size보다 길면 마지막 부분만 사용
+    encoded = encoded[
+        -checkpoint["block_size"] :
+    ]
 
     x = torch.tensor(
-        [ids],
+        [encoded],
         dtype=torch.long,
         device=device,
     )
 
     output = model.generate(
         x,
-        max_new_tokens=settings[
-            "max_new_tokens"
-        ],
-        temperature=settings[
-            "temperature"
-        ],
+        max_new_tokens=settings["max_new_tokens"],
+        temperature=settings["temperature"],
         top_k=40,
-        stop_token_id=stoi.get(
-            "<END>"
-        ),
+        stop_token_id=stoi.get("<END>"),
     )
 
-    output_ids = (
-        output[0].tolist()
+    generated_tokens = output[0].tolist()
+
+    # 입력 부분 제거
+    generated_tokens = generated_tokens[
+        len(encoded):
+    ]
+
+    text = decode_tokens(
+        generated_tokens
     )
 
-    response_ids = (
-        output_ids[len(ids):]
-    )
+    # 혹시 END 토큰 문자열이 출력되는 경우 제거
+    if "<END>" in text:
+        text = text.split(
+            "<END>",
+            1
+        )[0]
 
-    response = decode(
-        response_ids
-    )
-
-    return response.strip()
+    return text.strip()
 
 
 # ============================================================
-# API
+# 홈페이지
 # ============================================================
 
-@app.get("/")
+@app.route("/")
 def index():
-
     return send_from_directory(
         WEB_DIR,
         "index.html",
     )
 
 
-@app.get("/<path:path>")
-def static_files(path):
+# ============================================================
+# 정적 파일
+# ============================================================
 
+@app.route("/<path:filename>")
+def static_files(filename):
     return send_from_directory(
         WEB_DIR,
-        path,
+        filename,
     )
 
 
 # ============================================================
-# Status API
+# 상태 확인 API
 # ============================================================
 
-@app.get("/api/status")
+@app.route("/api/status", methods=["GET"])
 def status():
-
     return jsonify({
-
-        "version":
-            VERSION,
-
-        "model":
-            "Luau AI v5.2",
-
-        "device":
-            device,
-
+        "version": "Beta 0.5",
+        "model": "Luau AI v5.2",
+        "device": str(device),
         "gpu": (
-
             torch.cuda.get_device_name(0)
-
-            if device == "cuda"
-
+            if torch.cuda.is_available()
             else None
-
         ),
-
-        "parameters":
-            model.num_parameters(),
-
-        "best_val_loss":
-            checkpoint.get(
-                "best_val_loss"
-            ),
-
+        "parameters": PARAMETERS,
+        "best_val_loss": BEST_VAL_LOSS,
     })
 
 
 # ============================================================
-# Generate API
+# 🔥 Render 성능 측정용 Benchmark
 # ============================================================
 
-@app.post("/api/generate")
+@app.route("/api/benchmark", methods=["POST"])
+def benchmark():
+
+    # 테스트 입력 100토큰
+    x = torch.randint(
+        0,
+        len(stoi),
+        (1, 100),
+        dtype=torch.long,
+        device=device,
+    )
+
+    # CPU/GPU 동기화
+    if torch.cuda.is_available():
+        torch.cuda.synchronize()
+
+    start = time.perf_counter()
+
+    with torch.no_grad():
+        model.generate(
+            x,
+            max_new_tokens=1,
+            temperature=0.7,
+            top_k=40,
+        )
+
+    if torch.cuda.is_available():
+        torch.cuda.synchronize()
+
+    elapsed = (
+        time.perf_counter() - start
+    )
+
+    return jsonify({
+        "seconds": round(elapsed, 3),
+        "device": str(device),
+        "parameters": PARAMETERS,
+        "input_tokens": 100,
+        "generated_tokens": 1,
+    })
+
+
+# ============================================================
+# 생성 API
+# ============================================================
+
+@app.route(
+    "/api/generate",
+    methods=["POST"],
+)
 def generate():
-
-    data = request.get_json(
-        silent=True
-    ) or {}
-
-
-    prompt = str(
-        data.get(
-            "prompt",
-            ""
-        )
-    ).strip()
-
-
-    mode = str(
-        data.get(
-            "mode",
-            "CHAT"
-        )
-    ).upper()
-
-
-    if not prompt:
-
-        return jsonify({
-
-            "error":
-                "Prompt is empty."
-
-        }), 400
-
-
-    if mode not in MODE_SETTINGS:
-
-        mode = "CHAT"
-
 
     try:
 
-        print(
-            f"[API] Generate request "
-            f"mode={mode}"
-        )
+        data = request.get_json(
+            silent=True
+        ) or {}
 
-        print(
-            f"[API] Prompt: {prompt[:100]}"
-        )
+        prompt = str(
+            data.get("prompt", "")
+        ).strip()
 
+        mode = str(
+            data.get("mode", "CHAT")
+        ).upper()
+
+        if not prompt:
+            return jsonify({
+                "error": "prompt is required"
+            }), 400
+
+        if mode not in MODE_SETTINGS:
+            mode = "CHAT"
+
+        start = time.perf_counter()
 
         response = generate_response(
-            mode,
             prompt,
+            mode,
         )
 
-
-        print(
-            "[API] Generation complete"
+        elapsed = (
+            time.perf_counter()
+            - start
         )
-
 
         return jsonify({
-
-            "response":
-                response,
-
-            "mode":
-                mode,
-
-            "version":
-                VERSION,
-
+            "response": response,
+            "mode": mode,
+            "seconds": round(
+                elapsed,
+                3,
+            ),
+            "model": "Luau AI v5.2",
+            "version": "Beta 0.5",
         })
-
 
     except Exception as e:
 
         print(
             "Generation error:",
-            e
+            repr(e),
         )
 
         return jsonify({
-
-            "error":
-                str(e)
-
+            "error": str(e)
         }), 500
 
 
 # ============================================================
-# Start
+# 서버 실행
 # ============================================================
 
 if __name__ == "__main__":
 
-    print("=" * 64)
-
     print(
-        "Luau AI v5.2 Web Server Ready"
+        "Starting Luau AI server..."
     )
-
-    print("=" * 64)
-
-    print()
-
-    print("Open:")
-
-    print(
-        "http://127.0.0.1:8000/"
-    )
-
-    print()
-
 
     app.run(
-        host="127.0.0.1",
-        port=8000,
+        host="0.0.0.0",
+        port=10000,
         debug=False,
     )
